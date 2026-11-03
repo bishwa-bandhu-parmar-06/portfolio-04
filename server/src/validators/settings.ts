@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { THEME_PRESETS } from '../models/SiteSettings';
+import { SECTION_KEYS, THEME_PRESETS } from '../models/SiteSettings';
 import { hexColor, labelValue, longText, media, optionalUrl, requiredText, text } from './common';
 
 export const profileBody = z
@@ -46,4 +46,14 @@ export const seoBody = z
     keywords: z.array(requiredText(40)).max(20),
     ogImage: media.nullable(),
   })
+  .partial();
+
+const sectionCopy = z.object({
+  eyebrow: text(40),
+  title: requiredText(120),
+  description: text(300),
+});
+
+export const sectionsBody = z
+  .object(Object.fromEntries(SECTION_KEYS.map((key) => [key, sectionCopy])) as Record<(typeof SECTION_KEYS)[number], typeof sectionCopy>)
   .partial();

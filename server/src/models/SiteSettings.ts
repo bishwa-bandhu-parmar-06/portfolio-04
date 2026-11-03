@@ -1,6 +1,15 @@
 import { Schema, model } from 'mongoose';
 import { mediaSchema, type Media } from './media';
 
+export const SECTION_KEYS = ['about', 'experience', 'projects', 'skills', 'coding', 'education', 'contact'] as const;
+export type SectionKey = (typeof SECTION_KEYS)[number];
+
+export interface SectionCopy {
+  eyebrow: string;
+  title: string;
+  description: string;
+}
+
 export const THEME_PRESETS = ['indigo-cyan', 'emerald-teal', 'violet-pink', 'amber-orange', 'custom'] as const;
 
 interface Palette {
@@ -25,6 +34,8 @@ export interface SiteSettingsAttrs {
     photo?: Media | null;
   };
   stats: { label: string; value: string }[];
+  /** Heading copy for each home-page section. */
+  sections: Record<SectionKey, SectionCopy>;
   theme: {
     preset: (typeof THEME_PRESETS)[number];
     dark: Palette;
@@ -45,6 +56,15 @@ const paletteSchema = new Schema<Palette>(
   {
     primary: { type: String, required: true },
     secondary: { type: String, required: true },
+  },
+  { _id: false },
+);
+
+const sectionCopySchema = new Schema<SectionCopy>(
+  {
+    eyebrow: { type: String, default: '' },
+    title: { type: String, default: '' },
+    description: { type: String, default: '' },
   },
   { _id: false },
 );
@@ -70,6 +90,7 @@ const siteSettingsSchema = new Schema<SiteSettingsAttrs>(
       type: [new Schema({ label: String, value: String }, { _id: false })],
       default: [],
     },
+    sections: Object.fromEntries(SECTION_KEYS.map((key) => [key, { type: sectionCopySchema, default: () => ({}) }])),
     theme: {
       preset: { type: String, enum: THEME_PRESETS, default: 'indigo-cyan' },
       dark: { type: paletteSchema, default: () => ({ primary: '#6366F1', secondary: '#22D3EE' }) },

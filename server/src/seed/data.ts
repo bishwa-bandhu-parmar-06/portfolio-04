@@ -33,6 +33,29 @@ export const settings = {
     { label: 'Live products', value: '4' },
     { label: 'DSA problems solved', value: '1,500+' },
   ],
+  sections: {
+    about: { eyebrow: 'About', title: 'Engineer who ships end to end', description: '' },
+    experience: { eyebrow: 'Experience', title: "Where I've worked", description: '' },
+    projects: {
+      eyebrow: 'Projects',
+      title: "Products I've built and shipped",
+      description:
+        'Each one is designed, built and deployed solo, and every one is live. Open a project to see its features and architecture.',
+    },
+    skills: { eyebrow: 'Skills', title: 'Tools I use every day', description: '' },
+    coding: {
+      eyebrow: 'Problem solving',
+      title: '{total}+ DSA problems solved',
+      description: 'Consistent daily practice in data structures and algorithms on LeetCode and GeeksforGeeks.',
+    },
+    education: { eyebrow: 'Education', title: 'Education & certifications', description: '' },
+    contact: {
+      eyebrow: 'Contact',
+      title: "Let's build something together",
+      description:
+        "I'm open to SDE roles at product-based companies. Recruiters, engineers and founders: send a message and I'll reply within a day.",
+    },
+  },
   theme: {
     preset: 'indigo-cyan' as const,
     dark: { primary: '#6366F1', secondary: '#22D3EE' },

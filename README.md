@@ -4,7 +4,7 @@ Personal portfolio of **Bishwa Bandhu Parmar** with a private admin dashboard. E
 
 ```
 portfolio-04/
-├─ client/   Next.js 14 App Router frontend (Vercel)    ← Phase 3–4
+├─ client/   Next.js 16 App Router frontend (Vercel)
 └─ server/   Express + MongoDB REST API (Render)
 ```
 
@@ -14,9 +14,77 @@ portfolio-04/
 |---|---|---|
 | 1 | Plan, schemas, routes | ✅ |
 | 2 | Backend API: auth, models, CRUD, uploads, contact, seed | ✅ |
-| 3 | Public website, design system, 3D hero | ⏳ |
+| 3 | Public website, design system, 3D hero | ✅ |
 | 4 | Admin dashboard | ⏳ |
 | 5 | SEO, performance, security review, deployment | ⏳ |
+
+---
+
+## Quick start (both apps)
+
+```bash
+# 1. API (see "Server" below for the .env values)
+cd server && npm install && cp .env.example .env && npm run seed && npm run dev
+
+# 2. Website, in a second terminal
+cd client && npm install && cp .env.example .env.local && npm run dev
+```
+
+Open http://localhost:3000. The site reads everything from the API at `API_URL`, so the API must be running.
+
+---
+
+## Client (`client/`)
+
+**Stack:** Next.js 16 (App Router, Cache Components, Turbopack), React 19, TypeScript, Tailwind CSS 4, Motion (Framer Motion), React Three Fiber + three.js, lucide-react + simple-icons.
+
+### Environment (`client/.env.local`)
+
+| Variable | |
+|---|---|
+| `API_URL` | Express API base URL, e.g. `http://localhost:4000` or your Render URL |
+| `NEXT_PUBLIC_SITE_URL` | This site's public URL (`https://bishwabandhu.me` in production) |
+| `REVALIDATE_SECRET` | Same value as the server's `REVALIDATE_SECRET` |
+
+### Scripts
+
+| Command | |
+|---|---|
+| `npm run dev` | Dev server on http://localhost:3000 |
+| `npm run build && npm start` | Production build. The API must be reachable at build time, because pages are pre-rendered |
+| `npm run lint` | ESLint |
+
+### How content stays fresh
+
+- Pages are pre-rendered and cached with `'use cache'` + `cacheTag('portfolio')`, so visitors never wait for the API, even when Render's free tier is asleep.
+- After every admin edit, the API calls `POST /api/revalidate` (with `x-revalidate-secret`). The next page load then shows the change, including theme colors.
+- There is a daily background refresh as a safety net.
+- The browser never calls the API directly. `/api/*` is rewritten to `API_URL`, so the admin cookie stays first-party.
+
+### Structure
+
+```
+client/
+├─ app/
+│  ├─ layout.tsx               fonts, theme CSS variables, pre-paint dark/light script, metadata
+│  ├─ (site)/layout.tsx        navbar + footer
+│  ├─ (site)/page.tsx          home page sections, in order
+│  ├─ (site)/projects/[slug]/  project detail (pre-rendered per project)
+│  └─ api/revalidate/route.ts  cache refresh webhook
+├─ components/
+│  ├─ sections/   Hero, About, Experience, Projects, Skills, CodingProfiles, Education, Contact
+│  ├─ three/      HeroVisual (capability check, lazy load, pause off-screen) + HeroScene (R3F)
+│  ├─ motion/     scroll reveal + stagger (respects prefers-reduced-motion)
+│  └─ ui/         buttons, cards, icons, markdown
+└─ lib/           API client, types, theme + contrast helpers, Cloudinary image loader
+```
+
+### Design notes
+
+- Accent colors come from the database. `lib/color.ts` derives a button shade and a text shade from each accent so they always pass WCAG AA (4.5:1), whatever color is picked in the admin.
+- Icons: lucide-react for the interface, simple-icons for brand logos. Skill icons are stored as a simple-icons slug (`react`) or `lucide:<name>` (`lucide:database`).
+- Section headings are stored in the database too (`settings.sections`). In the coding-profiles title, `{total}` is replaced with the live problem count.
+- 3D hero: loaded only after the page is idle, and only on devices with WebGL. It is skipped for reduced motion, data saver, and low-power phones (which get a static gradient). Pixel ratio is capped at 1.5, and rendering pauses when the hero is off-screen or the tab is hidden.
 
 ---
 
@@ -88,7 +156,7 @@ There is no signup route.
 |---|---|---|
 | GET | `/api/admin/dashboard` | Counts, unread messages, last content update |
 | GET | `/api/admin/settings` | Full settings, including the phone number |
-| PATCH | `/api/admin/settings/profile` \| `stats` \| `theme` \| `seo` | Partial updates |
+| PATCH | `/api/admin/settings/profile` \| `stats` \| `sections` \| `theme` \| `seo` | Partial updates (`sections` = heading copy for each home-page section) |
 | GET POST | `/api/admin/{collection}` | List / create |
 | GET PATCH DELETE | `/api/admin/{collection}/:id` | Read / update / delete |
 | PATCH | `/api/admin/{collection}/reorder` | `{ ids: [...] }` in the new order |

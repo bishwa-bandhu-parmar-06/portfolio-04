@@ -46,6 +46,7 @@ publicRouter.get('/site', async (_req, res) => {
   res.set('Cache-Control', cache(60)).json({
     profile: { ...profile, phone: showPhone ? phone : undefined },
     stats: settings.stats,
+    sections: settings.sections,
     theme: settings.theme,
     seo: settings.seo,
     updatedAt: settings.contentUpdatedAt,

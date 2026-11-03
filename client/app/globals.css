@@ -1,0 +1,135 @@
+@import 'tailwindcss';
+
+/* Dark mode is driven by a `.dark` class on <html>, set before first paint. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Surface colours are fixed by the design system. Accent colours (--primary,
+ * --secondary and their accessible variants) are injected from the database
+ * in app/layout.tsx; the values here are fallbacks.
+ */
+:root {
+  --bg: #f8fafc;
+  --card: #ffffff;
+  --card-hover: #f1f5f9;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --muted: #475569;
+  --primary: #4f46e5;
+  --primary-rgb: 79 70 229;
+  --secondary: #0891b2;
+  --secondary-rgb: 8 145 178;
+  --primary-solid: #4f46e5;
+  --primary-text: #4f46e5;
+  --secondary-text: #0e7490;
+  --glow: 0 0 0 1px rgb(var(--primary-rgb) / 0.25), 0 12px 32px -12px rgb(var(--primary-rgb) / 0.35);
+}
+
+.dark {
+  --bg: #0a0f1c;
+  --card: #111827;
+  --card-hover: #162033;
+  --border: #1f2937;
+  --text: #e5e7eb;
+  --muted: #94a3b8;
+  --primary: #6366f1;
+  --primary-rgb: 99 102 241;
+  --secondary: #22d3ee;
+  --secondary-rgb: 34 211 238;
+  --primary-solid: #5558e8;
+  --primary-text: #8b8df5;
+  --secondary-text: #22d3ee;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-card-hover: var(--card-hover);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+  --color-primary-solid: var(--primary-solid);
+  --color-primary-text: var(--primary-text);
+  --color-secondary-text: var(--secondary-text);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-space-grotesk), var(--font-inter), ui-sans-serif, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+
+  --shadow-glow: var(--glow);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 5rem;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+  ::selection {
+    background: rgb(var(--primary-rgb) / 0.3);
+  }
+  :focus-visible {
+    outline: 2px solid var(--primary-text);
+    outline-offset: 3px;
+    border-radius: 6px;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    background: linear-gradient(100deg, var(--primary-text), var(--secondary-text));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, rgb(148 163 184 / 0.07) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(148 163 184 / 0.07) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Hero entrance: pure CSS so the largest contentful paint never waits on JavaScript. */
+@keyframes hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.hero-rise {
+  animation: hero-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}

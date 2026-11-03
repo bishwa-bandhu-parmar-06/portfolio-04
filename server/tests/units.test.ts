@@ -3,7 +3,7 @@ import * as data from '../src/seed/data';
 import { detectFileType } from '../src/utils/fileType';
 import { sanitizeValue } from '../src/middleware/sanitize';
 import * as v from '../src/validators/content';
-import { profileBody, seoBody, statsBody, themeBody } from '../src/validators/settings';
+import { profileBody, sectionsBody, seoBody, statsBody, themeBody } from '../src/validators/settings';
 import { api, loginCookie, useTestDb } from './helpers';
 
 useTestDb();
@@ -64,6 +64,7 @@ describe('seed data', () => {
     expect(() => profileBody.parse(data.settings.profile)).not.toThrow();
     expect(() => statsBody.parse({ stats: data.settings.stats })).not.toThrow();
     expect(() => themeBody.parse(data.settings.theme)).not.toThrow();
+    expect(() => sectionsBody.parse(data.settings.sections)).not.toThrow();
     expect(() => seoBody.parse(data.settings.seo)).not.toThrow();
     for (const s of data.socialLinks) v.socialLinkCreate.parse(s);
     for (const e of data.experience) v.experienceCreate.parse(e);
