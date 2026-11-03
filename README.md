@@ -15,7 +15,7 @@ portfolio-04/
 | 1 | Plan, schemas, routes | ✅ |
 | 2 | Backend API: auth, models, CRUD, uploads, contact, seed | ✅ |
 | 3 | Public website, design system, 3D hero | ✅ |
-| 4 | Admin dashboard | ⏳ |
+| 4 | Admin dashboard | ✅ |
 | 5 | SEO, performance, security review, deployment | ⏳ |
 
 ---
@@ -45,6 +45,7 @@ Open http://localhost:3000. The site reads everything from the API at `API_URL`,
 | `API_URL` | Express API base URL, e.g. `http://localhost:4000` or your Render URL |
 | `NEXT_PUBLIC_SITE_URL` | This site's public URL (`https://bishwabandhu.me` in production) |
 | `REVALIDATE_SECRET` | Same value as the server's `REVALIDATE_SECRET` |
+| `JWT_SECRET` | Same value as the server's `JWT_SECRET` (used by `proxy.ts` to guard `/admin`) |
 
 ### Scripts
 
@@ -78,6 +79,29 @@ client/
 │  └─ ui/         buttons, cards, icons, markdown
 └─ lib/           API client, types, theme + contrast helpers, Cloudinary image loader
 ```
+
+### Admin dashboard (`/admin`)
+
+Sign in at `/admin/login` with the `ADMIN_EMAIL` / `ADMIN_PASSWORD` you seeded. There is no signup.
+
+| Page | What you can do |
+|---|---|
+| Dashboard | Project and unread-message counts, last content update, latest messages |
+| Messages | Search, filter (unread/read/replied), open (marks as read), reply by email, mark replied/unread, delete |
+| Profile | Name, title, company, tagline, bio, location, availability, email, phone (hidden by default), photo upload; quick stats |
+| Resumes | Upload PDF versions, choose the default for every Download button |
+| Social links, Projects, Experience, Skills, Coding profiles, Education, Certifications | Add, edit, delete, show/hide, drag to reorder (or focus the handle and use the arrow keys) |
+| Section headings | Label, heading and intro text for each home-page section |
+| Theme | Presets, custom accent colours for dark and light, default mode, live preview with contrast check |
+| SEO | Site title, meta description, keywords, Open Graph image |
+| Password | Change password (signs out every other session) |
+
+How it works:
+
+- **Guarding:** `client/proxy.ts` checks the session cookie's JWT before any `/admin` page is sent, and marks those pages `noindex` and `no-store`. Set `JWT_SECRET` in `client/.env.local` to the same value as the server's. The Express API still verifies the session on every request; the proxy is only a fast first check.
+- **Forms:** forms are declared as field lists (`lib/admin/collections.tsx`, `lib/admin/settings.ts`) and rendered by `components/admin/FormFields.tsx`. Field names match the server's Zod schemas, so server validation errors appear under the right input.
+- **Uploads:** files go to `/api/admin/uploads` first, then the returned file is saved onto the item. Uploads you replace or cancel before saving are deleted from Cloudinary; files replaced on a saved item are deleted by the server.
+- **Publishing:** every save triggers the site refresh, so the public site shows the change on the next page load.
 
 ### Design notes
 
