@@ -31,7 +31,7 @@ export async function uploadFile(buffer: Buffer, kind: UploadKind, folder: strin
         unique_filename: true,
         overwrite: false,
       },
-      (error, res) => (error || !res ? reject(error ?? new Error('Upload failed')) : resolve(res)),
+      (error, res) => (error || !res ? reject(cloudinaryError(error)) : resolve(res)),
     );
     stream.end(buffer);
   });
@@ -46,8 +46,30 @@ export async function uploadFile(buffer: Buffer, kind: UploadKind, folder: strin
   };
 }
 
+/**
+ * Turn a Cloudinary failure into a message the admin can act on. The SDK reports
+ * some rejections only as "unexpected status code", so map by HTTP status.
+ */
+function cloudinaryError(error: { http_code?: number; message?: string } | undefined): AppError {
+  const code = error?.http_code;
+  console.error('[cloudinary] upload failed:', code ?? '', error?.message ?? error);
+  const message =
+    code === 401
+      ? 'Cloudinary rejected the API key or secret. Check CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET on the server.'
+      : code === 403
+        ? 'Cloudinary refused the upload: this API key is not allowed to upload files. In Cloudinary → Settings → API Keys, use a key with full (Admin) permissions, or give this key upload access.'
+        : code === 404
+          ? 'Cloudinary account not found. Check CLOUDINARY_CLOUD_NAME on the server.'
+          : code === 420 || code === 429
+            ? 'Cloudinary rate limit reached. Please try again in a minute.'
+            : 'Upload to Cloudinary failed. Please try again.';
+  return new AppError(502, message, 'UPLOAD_FAILED');
+}
+
 export async function deleteFile(publicId: string, resourceType: Media['resourceType'] = 'image'): Promise<void> {
   if (!cloudinaryEnabled) return;
+  // Never touch assets outside this site's folder, even if one was somehow saved on a document.
+  if (!publicId.startsWith(`${env.CLOUDINARY_FOLDER}/`)) return;
   await cloudinary.uploader.destroy(publicId, { resource_type: resourceType, invalidate: true });
 }
 

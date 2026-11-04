@@ -2,19 +2,34 @@
 
 import { CircleAlert, CircleCheck, LoaderCircle, Send } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
-import { z } from 'zod';
 import { buttonClass } from '@/components/ui/primitives';
 import { cn } from '@/lib/format';
 
-// Mirrors server/src/validators/message.ts so visitors get instant feedback; the API validates again.
-const schema = z.object({
-  name: z.string().trim().min(2, 'Please enter your name').max(80, 'Name is too long'),
-  email: z.email('Please enter a valid email').max(254),
-  subject: z.string().trim().min(3, 'Please add a subject').max(120, 'Subject is too long'),
-  message: z.string().trim().min(10, 'Message is too short (10 characters minimum)').max(5000, 'Message is too long'),
-});
+type Field = 'name' | 'email' | 'subject' | 'message';
+type Values = Record<Field, string>;
 
-type Field = keyof z.infer<typeof schema>;
+// Mirrors server/src/validators/message.ts for instant feedback; the API validates again.
+// Plain checks instead of a schema library keep ~30 KB of JavaScript off the home page.
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const RULES: Record<Field, (v: string) => string | null> = {
+  name: (v) => (v.length < 2 ? 'Please enter your name' : v.length > 80 ? 'Name is too long' : null),
+  email: (v) => (!EMAIL.test(v) || v.length > 254 ? 'Please enter a valid email' : null),
+  subject: (v) => (v.length < 3 ? 'Please add a subject' : v.length > 120 ? 'Subject is too long' : null),
+  message: (v) =>
+    v.length < 10 ? 'Message is too short (10 characters minimum)' : v.length > 5000 ? 'Message is too long' : null,
+};
+
+function validate(data: Record<string, string>): { values: Values; errors: Partial<Record<Field, string>> } {
+  const values = {} as Values;
+  const errors: Partial<Record<Field, string>> = {};
+  for (const field of Object.keys(RULES) as Field[]) {
+    values[field] = (data[field] ?? '').trim();
+    const error = RULES[field](values[field]);
+    if (error) errors[field] = error;
+  }
+  return { values, errors };
+}
+
 type Status = { state: 'idle' } | { state: 'sending' } | { state: 'sent' } | { state: 'error'; message: string };
 
 const FIELDS: { name: Field; label: string; type?: string; autoComplete?: string; rows?: number }[] = [
@@ -33,12 +48,11 @@ export function ContactForm() {
     const form = e.currentTarget;
     const data = Object.fromEntries(new FormData(form)) as Record<string, string>;
 
-    const parsed = schema.safeParse(data);
-    if (!parsed.success) {
-      const next: Partial<Record<Field, string>> = {};
-      for (const issue of parsed.error.issues) next[issue.path[0] as Field] ??= issue.message;
-      setErrors(next);
-      form.querySelector<HTMLElement>(`[name="${Object.keys(next)[0]}"]`)?.focus();
+    const { values, errors: invalid } = validate(data);
+    const firstInvalid = Object.keys(invalid)[0];
+    if (firstInvalid) {
+      setErrors(invalid);
+      form.querySelector<HTMLElement>(`[name="${firstInvalid}"]`)?.focus();
       return;
     }
 
@@ -48,7 +62,7 @@ export function ContactForm() {
       const res = await fetch('/api/public/contact', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ...parsed.data, website: data.website ?? '' }),
+        body: JSON.stringify({ ...values, website: data.website ?? '' }),
       });
       if (res.ok) {
         form.reset();

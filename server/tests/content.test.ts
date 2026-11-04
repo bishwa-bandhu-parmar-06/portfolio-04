@@ -183,3 +183,10 @@ describe('public API', () => {
     expect(evil.headers['access-control-allow-origin']).toBeUndefined();
   });
 });
+
+describe('root route', () => {
+  it('describes the API instead of returning 404', async () => {
+    const res = await api().get('/').expect(200);
+    expect(res.body).toMatchObject({ name: 'portfolio-api', status: 'ok', endpoints: { health: '/health' } });
+  });
+});

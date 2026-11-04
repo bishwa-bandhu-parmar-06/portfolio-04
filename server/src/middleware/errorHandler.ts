@@ -40,7 +40,7 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   }
 
   if (err instanceof mongoose.Error.ValidationError) {
-    res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: err.message } });
+    res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: isProd ? 'Some fields are invalid' : err.message } });
     return;
   }
 

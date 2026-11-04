@@ -16,7 +16,9 @@ portfolio-04/
 | 2 | Backend API: auth, models, CRUD, uploads, contact, seed | ✅ |
 | 3 | Public website, design system, 3D hero | ✅ |
 | 4 | Admin dashboard | ✅ |
-| 5 | SEO, performance, security review, deployment | ⏳ |
+| 5 | SEO, performance, security review, deployment | ✅ |
+
+**Deploying:** see [DEPLOYMENT.md](DEPLOYMENT.md) (Atlas, Cloudinary, Resend, Render, Vercel, custom domain, post-deploy checklist).
 
 ---
 
@@ -45,14 +47,15 @@ Open http://localhost:3000. The site reads everything from the API at `API_URL`,
 | `API_URL` | Express API base URL, e.g. `http://localhost:4000` or your Render URL |
 | `NEXT_PUBLIC_SITE_URL` | This site's public URL (`https://bishwabandhu.me` in production) |
 | `REVALIDATE_SECRET` | Same value as the server's `REVALIDATE_SECRET` |
-| `JWT_SECRET` | Same value as the server's `JWT_SECRET` (used by `proxy.ts` to guard `/admin`) |
+| `PROXY_SECRET` | Same value as the server's `PROXY_SECRET`. `proxy.ts` sends it with each visitor's IP so the API's rate limits work per visitor |
 
 ### Scripts
 
 | Command | |
 |---|---|
 | `npm run dev` | Dev server on http://localhost:3000 |
-| `npm run build && npm start` | Production build. The API must be reachable at build time, because pages are pre-rendered |
+| `npm run build && npm start` | Production build. `prebuild` first checks the env vars and wakes the API (up to 2 min), because pages are pre-rendered from it; the build stops with a clear message if either is wrong |
+| `npm run typecheck` | Generate route types and run TypeScript |
 | `npm run lint` | ESLint |
 
 ### How content stays fresh
@@ -98,7 +101,7 @@ Sign in at `/admin/login` with the `ADMIN_EMAIL` / `ADMIN_PASSWORD` you seeded. 
 
 How it works:
 
-- **Guarding:** `client/proxy.ts` checks the session cookie's JWT before any `/admin` page is sent, and marks those pages `noindex` and `no-store`. Set `JWT_SECRET` in `client/.env.local` to the same value as the server's. The Express API still verifies the session on every request; the proxy is only a fast first check.
+- **Guarding:** `client/proxy.ts` redirects to the login page when there is no session cookie, and marks `/admin` pages `noindex` and `no-store`. The Express API verifies the session on every request, and the admin shell signs out on any 401. The JWT secret lives only on the API, so the web server can never mint admin tokens.
 - **Forms:** forms are declared as field lists (`lib/admin/collections.tsx`, `lib/admin/settings.ts`) and rendered by `components/admin/FormFields.tsx`. Field names match the server's Zod schemas, so server validation errors appear under the right input.
 - **Uploads:** files go to `/api/admin/uploads` first, then the returned file is saved onto the item. Uploads you replace or cancel before saving are deleted from Cloudinary; files replaced on a saved item are deleted by the server.
 - **Publishing:** every save triggers the site refresh, so the public site shows the change on the next page load.
@@ -196,13 +199,46 @@ Uploading is two steps: `POST /uploads` returns a `media` object, which you then
 
 ### Security
 
-- Passwords hashed with bcrypt (cost 12). Unknown emails take as long to reject as wrong passwords.
-- JWT in an `httpOnly`, `SameSite=Lax` cookie (`Secure` in production). Tokens issued before a password change are rejected.
-- Every input is validated with Zod. Links must be `http(s)`, and images must be Cloudinary URLs.
+**Accounts and sessions**
+- Passwords are hashed with bcrypt (cost 12). Unknown emails take as long to reject as wrong passwords.
+- Lockout: 5 wrong passwords lock the account for 15 minutes. Each attempt claims a slot atomically *before* the password check, so parallel requests can't exceed the limit.
+- Sessions are a JWT in an `httpOnly`, `SameSite=Lax` cookie (`Secure` in production).
+- Logging out or changing the password bumps `sessionVersion`, which revokes every outstanding token on the server, not just in the browser.
+
+**Input handling**
+- Every input is validated with Zod. Links must be `http(s)`; images must be Cloudinary URLs inside this site's `CLOUDINARY_FOLDER`, so the server never deletes another app's files.
 - NoSQL injection: `$` and dotted keys are stripped, and Mongoose `sanitizeFilter` is on.
-- XSS: HTML tags are stripped from text fields. Markdown fields are rendered without raw HTML on the client.
-- Helmet headers. CORS is limited to `CLIENT_ORIGINS`. Global, login and contact rate limits.
-- Contact IPs are stored only as salted SHA-256 hashes.
+- XSS:
+  - HTML is stripped from text fields with linear-time matching (no ReDoS).
+  - Markdown is rendered without raw HTML.
+  - JSON-LD escapes `<`, `>`, `&`, U+2028 and U+2029.
+  - The website sends a strict CSP: no third-party scripts, `frame-ancestors 'none'`, `object-src 'none'`, plus HSTS and other security headers.
+
+**Abuse protection**
+- Rate limits are global, plus stricter ones on login and the contact form. They run before body parsing.
+- Behind the website, visitors are identified by `x-client-ip` + `PROXY_SECRET` set by `proxy.ts`. Spoofed headers on direct requests to the API are ignored.
+- Contact IPs are stored only as HMAC-SHA256 hashes.
+- In production the API refuses to start with missing or short secrets.
+- Helmet is on, and CORS is limited to `CLIENT_ORIGINS`.
+
+The regression tests for all of this are in `server/tests/security.test.ts`.
+
+### Performance (Lighthouse 13, local production build)
+
+| Page | Desktop (perf / a11y / best practices / SEO) | Mobile (perf / a11y / best practices / SEO) |
+|---|---|---|
+| Home | 100 / 100 / 100 / 100 | 78–81 / 100 / 100 / 100 |
+| Project detail | 100 / 100 / 100 / 100 | 83–88 / 100 / 100 / 100 |
+
+The mobile score is limited by the Next.js + React runtime under Lighthouse's 4× CPU throttle on the test laptop. A near-empty page in the same app scored 83–85 there. Re-check with PageSpeed Insights after deploying (see DEPLOYMENT.md).
+
+What keeps it fast:
+- Pages are pre-rendered.
+- The hero has a CSS-only entrance.
+- The 3D scene loads only on desktop, after the first interaction, and its WebGL check is deferred until then.
+- No schema library ships to visitors.
+- Cloudinary resizes images.
+- Fonts are self-hosted by `next/font`.
 
 ### Cloudinary note
 

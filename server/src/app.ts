@@ -1,7 +1,7 @@
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
-import express from 'express';
+import express, { type Request } from 'express';
 import helmet from 'helmet';
 import mongoose from 'mongoose';
 import morgan from 'morgan';
@@ -10,6 +10,7 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { apiLimiter } from './middleware/rateLimit';
 import { sanitizeBody } from './middleware/sanitize';
 import { apiRouter } from './routes';
+import { clientIp } from './utils/clientIp';
 
 export function createApp() {
   const app = express();
@@ -35,11 +36,27 @@ export function createApp() {
     }),
   );
   app.use(compression());
-  if (!isTest) app.use(morgan(isProd ? 'combined' : 'dev'));
+  // Log the visitor's IP (as resolved for rate limiting), not the proxy's.
+  morgan.token('client-ip', (req) => clientIp(req as Request));
+  if (!isTest) {
+    app.use(morgan(isProd ? ':client-ip ":method :url" :status :res[content-length] - :response-time ms ":user-agent"' : 'dev'));
+  }
 
+  // Rate-limit before any body parsing or sanitizing, so floods are rejected cheaply.
+  app.use(apiLimiter);
   app.use(express.json({ limit: '200kb' }));
   app.use(cookieParser());
   app.use(sanitizeBody);
+
+  // This is a JSON API (the website lives on CLIENT_URL); the root just says so.
+  app.get('/', (_req, res) => {
+    res.json({
+      name: 'portfolio-api',
+      status: 'ok',
+      website: env.CLIENT_URL,
+      endpoints: { health: '/health', site: '/api/public/site', projects: '/api/public/projects' },
+    });
+  });
 
   app.get('/health', (_req, res) => {
     res.set('Cache-Control', 'no-store').json({
@@ -49,7 +66,7 @@ export function createApp() {
     });
   });
 
-  app.use('/api', apiLimiter, apiRouter);
+  app.use('/api', apiRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

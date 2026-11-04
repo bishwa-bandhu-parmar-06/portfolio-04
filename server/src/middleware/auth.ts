@@ -17,7 +17,7 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
   }
 
   const admin = await Admin.findById(payload.sub);
-  if (!admin || tokenIsStale(admin, payload.iat)) {
+  if (!admin || tokenIsStale(admin, payload)) {
     throw unauthorized('Session expired. Please log in again.');
   }
 

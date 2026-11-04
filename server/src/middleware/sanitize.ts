@@ -3,11 +3,30 @@ import type { RequestHandler } from 'express';
 /** Fields that must reach the handler untouched. Markdown is rendered without raw HTML on the client. */
 const RAW_KEYS = new Set(['password', 'currentPassword', 'newPassword', 'description', 'architecture']);
 
-const HTML_TAG = /<\/?[a-z][a-z0-9-]*\b[^<>]*>/gi;
-const DANGEROUS_BLOCK = /<(script|style|iframe|object|embed)\b[\s\S]*?<\/\1\s*>/gi;
+// Linear-time on purpose: no nested quantifiers, so hostile input can't cause catastrophic backtracking.
+const HTML_TAG = /<\/?[a-z][^<>]*>/gi;
+const DANGEROUS_TAGS = ['script', 'style', 'iframe', 'object', 'embed'];
+
+/** Remove `<tag …>…</tag>` blocks (contents included) with indexOf scans instead of a regex. */
+function removeBlocks(value: string): string {
+  let out = value;
+  for (const tag of DANGEROUS_TAGS) {
+    let lower = out.toLowerCase();
+    let start = lower.indexOf(`<${tag}`);
+    while (start !== -1) {
+      const close = lower.indexOf(`</${tag}`, start);
+      if (close === -1) break;
+      const end = lower.indexOf('>', close);
+      out = out.slice(0, start) + out.slice(end === -1 ? out.length : end + 1);
+      lower = out.toLowerCase();
+      start = lower.indexOf(`<${tag}`, start);
+    }
+  }
+  return out;
+}
 
 export function stripHtml(value: string): string {
-  return value.replace(/\0/g, '').replace(DANGEROUS_BLOCK, '').replace(HTML_TAG, '');
+  return removeBlocks(value.replace(/\0/g, '')).replace(HTML_TAG, '');
 }
 
 /**

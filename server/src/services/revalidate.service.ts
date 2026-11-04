@@ -21,7 +21,13 @@ export function contentChanged(): void {
   }, 1500);
 }
 
-async function pingClient(): Promise<void> {
+/** Ask the website to refresh right away (no debounce). Returns whether it confirmed. */
+export async function refreshSiteNow(): Promise<boolean> {
+  if (isTest || !env.REVALIDATE_SECRET) return false;
+  return pingClient();
+}
+
+async function pingClient(): Promise<boolean> {
   try {
     const res = await fetch(new URL('/api/revalidate', env.CLIENT_URL), {
       method: 'POST',
@@ -30,7 +36,9 @@ async function pingClient(): Promise<void> {
       signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) console.warn(`[revalidate] Client responded ${res.status}`);
+    return res.ok;
   } catch (err) {
     console.warn('[revalidate] Could not reach the client:', (err as Error).message);
+    return false;
   }
 }

@@ -1,9 +1,11 @@
-import rateLimit, { type Options } from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator, type Options } from 'express-rate-limit';
 import { isTest } from '../config/env';
+import { clientIp } from '../utils/clientIp';
 
 const base: Partial<Options> = {
   standardHeaders: 'draft-8',
   legacyHeaders: false,
+  keyGenerator: (req) => ipKeyGenerator(clientIp(req)),
   skip: () => isTest && process.env.RATE_LIMIT_IN_TESTS !== 'true',
 };
 

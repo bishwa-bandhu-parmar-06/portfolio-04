@@ -17,21 +17,23 @@ export function About({ site, copy }: { site: SiteData; copy: SectionCopy }) {
           ))}
           <dl className="grid gap-4 pt-2 text-sm sm:grid-cols-2">
             {profile.location && (
-              <div className="flex items-start gap-3">
-                <MapPin size={18} className="mt-0.5 shrink-0 text-primary-text" aria-hidden />
-                <div>
-                  <dt className="font-mono text-xs uppercase tracking-wider text-muted">Based in</dt>
-                  <dd className="mt-1 text-text">{profile.location}</dd>
-                </div>
+              <div>
+                {/* dt/dd must be direct children of the group for a valid description list. */}
+                <dt className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-muted">
+                  <MapPin size={16} className="shrink-0 text-primary-text" aria-hidden />
+                  Based in
+                </dt>
+                <dd className="mt-1 pl-6 text-text">{profile.location}</dd>
               </div>
             )}
             {profile.availability && (
-              <div className="flex items-start gap-3">
-                <Briefcase size={18} className="mt-0.5 shrink-0 text-primary-text" aria-hidden />
-                <div>
-                  <dt className="font-mono text-xs uppercase tracking-wider text-muted">Looking for</dt>
-                  <dd className="mt-1 text-text">{profile.availability}</dd>
-                </div>
+              <div>
+                {/* dt/dd must be direct children of the group for a valid description list. */}
+                <dt className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-muted">
+                  <Briefcase size={16} className="shrink-0 text-primary-text" aria-hidden />
+                  Looking for
+                </dt>
+                <dd className="mt-1 pl-6 text-text">{profile.availability}</dd>
               </div>
             )}
           </dl>

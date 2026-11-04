@@ -7,6 +7,7 @@ export interface AdminAttrs {
   lockUntil?: Date | null;
   passwordChangedAt?: Date | null;
   lastLoginAt?: Date | null;
+  sessionVersion: number;
 }
 
 const adminSchema = new Schema<AdminAttrs>(
@@ -17,6 +18,7 @@ const adminSchema = new Schema<AdminAttrs>(
     lockUntil: { type: Date, default: null },
     passwordChangedAt: { type: Date, default: null },
     lastLoginAt: { type: Date, default: null },
+    sessionVersion: { type: Number, default: 0 },
   },
   { timestamps: true },
 );

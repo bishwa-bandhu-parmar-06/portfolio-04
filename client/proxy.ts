@@ -1,39 +1,41 @@
-import { jwtVerify } from 'jose';
 import { NextResponse, type NextRequest } from 'next/server';
 
 const COOKIE_NAME = process.env.COOKIE_NAME ?? 'pf_session';
-const secret = process.env.JWT_SECRET ? new TextEncoder().encode(process.env.JWT_SECRET) : null;
+const PROXY_SECRET = process.env.PROXY_SECRET ?? '';
 
 /**
- * Optimistic gate for /admin: bounce visitors without a valid session cookie to
- * the login page before any admin UI is sent. The API still checks the session
- * on every request, so this is about UX, not the security boundary.
+ * /api/*: forward the visitor's IP to the Express API with a shared secret, so
+ * its rate limits count real visitors rather than this server. Headers a
+ * visitor sends with the same names are always discarded first.
  */
-async function hasSession(request: NextRequest): Promise<boolean> {
-  const token = request.cookies.get(COOKIE_NAME)?.value;
-  if (!token) return false;
-  // Without the shared secret (e.g. a misconfigured preview) fall back to "cookie present".
-  if (!secret) return true;
-  try {
-    await jwtVerify(token, secret, { algorithms: ['HS256'] });
-    return true;
-  } catch {
-    return false;
+function forwardToApi(request: NextRequest) {
+  const headers = new Headers(request.headers);
+  headers.delete('x-client-ip');
+  headers.delete('x-proxy-secret');
+  // On Vercel these are set by the platform from the real connection.
+  const ip = request.headers.get('x-real-ip') ?? request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+  if (PROXY_SECRET && ip) {
+    headers.set('x-client-ip', ip);
+    headers.set('x-proxy-secret', PROXY_SECRET);
   }
+  return NextResponse.next({ request: { headers } });
 }
 
-export async function proxy(request: NextRequest) {
+/**
+ * /admin: send visitors without a session cookie to the login page before any
+ * admin UI is served. This only checks that the cookie exists; the API verifies
+ * it on every request, and the admin shell signs out on any 401. Keeping the
+ * JWT secret off the web server means it can't be used to mint tokens there.
+ */
+function guardAdmin(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   const isLogin = pathname === '/admin/login';
-  const signedIn = await hasSession(request);
+  const hasCookie = Boolean(request.cookies.get(COOKIE_NAME)?.value);
 
-  if (!isLogin && !signedIn) {
+  if (!isLogin && !hasCookie) {
     const url = new URL('/admin/login', request.url);
     if (pathname !== '/admin') url.searchParams.set('next', pathname + search);
     return NextResponse.redirect(url);
-  }
-  if (isLogin && signedIn) {
-    return NextResponse.redirect(new URL('/admin', request.url));
   }
 
   const response = NextResponse.next();
@@ -42,6 +44,12 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
+export function proxy(request: NextRequest) {
+  return request.nextUrl.pathname.startsWith('/api/') ? forwardToApi(request) : guardAdmin(request);
+}
+
 export const config = {
-  matcher: ['/admin', '/admin/:path*'],
+  // Uploads skip the proxy: they are admin-only (no per-visitor limits needed), and keeping
+  // multi-megabyte bodies out of the proxy function avoids platform request-size caps.
+  matcher: ['/admin', '/admin/:path*', '/api/((?!admin/uploads).*)'],
 };

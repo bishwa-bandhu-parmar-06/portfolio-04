@@ -1,11 +1,11 @@
-import { createHash } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 import { env } from '../config/env';
 
 export function slugify(input: string): string {
   return input
     .toLowerCase()
     .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 80);
@@ -26,5 +26,5 @@ export function escapeHtml(input: string): string {
 
 /** One-way hash so we can spot repeat senders without storing raw IP addresses. */
 export function hashIp(ip: string | undefined): string {
-  return createHash('sha256').update(`${env.IP_HASH_SALT}:${ip ?? 'unknown'}`).digest('hex');
+  return createHmac('sha256', env.IP_HASH_SALT).update(ip ?? 'unknown').digest('hex');
 }

@@ -4,12 +4,14 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
+import { SectionLink } from '@/components/layout/SectionLink';
 import { ProjectCover } from '@/components/sections/ProjectCard';
 import { Icon } from '@/components/ui/Icon';
 import { Markdown } from '@/components/ui/Markdown';
 import { Card, Tag, buttonClass } from '@/components/ui/primitives';
-import { getProject, getProjectSlugs } from '@/lib/api';
+import { getProject, getProjectSlugs, getSite } from '@/lib/api';
 import { formatMonth } from '@/lib/format';
+import { SITE_URL, jsonLd } from '@/lib/site';
 
 // Cache Components requires at least one param; an unknown slug simply renders the 404.
 const NO_PROJECTS = '__none__';
@@ -33,11 +35,16 @@ export async function generateMetadata({ params }: PageProps<'/projects/[slug]'>
       title: project.title,
       description,
       url: `/projects/${project.slug}`,
-      ...(project.coverImage ? { images: [{ url: project.coverImage.url }] } : {}),
     },
   };
 }
 
+/**
+ * Built projects are fully pre-rendered. Any other slug (a project added after the
+ * deploy) gets the pre-rendered shell instantly and its content streams in, then is
+ * cached. Unknown slugs show the not-found page with `noindex` (the 200 status is
+ * already sent by the time the lookup finishes).
+ */
 export default function ProjectPage(props: PageProps<'/projects/[slug]'>) {
   return (
     <Suspense fallback={<DetailSkeleton />}>
@@ -48,15 +55,30 @@ export default function ProjectPage(props: PageProps<'/projects/[slug]'>) {
 
 async function ProjectDetail({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const data = slug === NO_PROJECTS ? null : await getProject(slug);
+  const [data, site] = await Promise.all([slug === NO_PROJECTS ? null : getProject(slug), getSite()]);
   if (!data) notFound();
   const { project, prev, next } = data;
+  const structured = {
+    '@context': 'https://schema.org',
+    '@type': 'CreativeWork',
+    name: project.title,
+    headline: project.subtitle || project.title,
+    description: project.summary,
+    url: `${SITE_URL}/projects/${project.slug}`,
+    ...(project.date ? { dateCreated: project.date } : {}),
+    keywords: project.techTags.join(', '),
+    ...(project.coverImage ? { image: project.coverImage.url } : {}),
+    ...(project.githubUrl ? { codeRepository: project.githubUrl } : {}),
+    ...(project.liveUrl ? { sameAs: project.liveUrl } : {}),
+    author: { '@type': 'Person', name: site.profile.name, url: SITE_URL },
+  };
 
   return (
     <article className="mx-auto max-w-4xl px-4 pt-28 pb-20 sm:px-6 sm:pt-32 lg:px-8">
-      <Link href="/#projects" className="inline-flex items-center gap-2 text-sm text-muted transition-colors hover:text-text">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(structured) }} />
+      <SectionLink section="projects" className="inline-flex items-center gap-2 text-sm text-muted transition-colors hover:text-text">
         <ArrowLeft size={16} aria-hidden /> All projects
-      </Link>
+      </SectionLink>
 
       <header className="mt-8">
         <p className="font-mono text-xs uppercase tracking-[0.2em] text-primary-text">

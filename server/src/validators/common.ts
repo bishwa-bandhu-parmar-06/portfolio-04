@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { env } from '../config/env';
 
 export const objectId = z.string().regex(/^[a-f\d]{24}$/i, 'Invalid id');
 export const idParams = z.object({ id: objectId });
@@ -23,7 +24,7 @@ export const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Must be a hex col
 
 export const media = z.object({
   url: z.url({ protocol: /^https$/, hostname: /^res\.cloudinary\.com$/, error: 'Must be a Cloudinary URL' }),
-  publicId: requiredText(300),
+  publicId: requiredText(300).refine((id) => id.startsWith(`${env.CLOUDINARY_FOLDER}/`), 'Must be a file uploaded by this site'),
   resourceType: z.enum(['image', 'raw']).default('image'),
   format: text(20).optional(),
   bytes: z.number().int().nonnegative().optional(),

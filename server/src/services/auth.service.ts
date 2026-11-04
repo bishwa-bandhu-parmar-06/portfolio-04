@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt, { type SignOptions } from 'jsonwebtoken';
 import type { CookieOptions, Response } from 'express';
+import { trusted } from 'mongoose';
 import { env, isProd } from '../config/env';
 import { Admin, type AdminDoc } from '../models';
 import { AppError, unauthorized } from '../utils/errors';
@@ -14,15 +15,17 @@ const DUMMY_HASH = bcrypt.hashSync('not-the-password', BCRYPT_ROUNDS);
 
 export interface TokenPayload {
   sub: string;
+  /** Admin.sessionVersion at sign-in; bumping it revokes every outstanding token. */
+  v: number;
   iat: number;
   exp: number;
 }
 
 export const hashPassword = (password: string) => bcrypt.hash(password, BCRYPT_ROUNDS);
 
-export function signToken(adminId: string): string {
-  return jwt.sign({}, env.JWT_SECRET, {
-    subject: adminId,
+export function signToken(admin: Pick<AdminDoc, 'id' | 'sessionVersion'>): string {
+  return jwt.sign({ v: admin.sessionVersion ?? 0 }, env.JWT_SECRET, {
+    subject: admin.id,
     expiresIn: env.JWT_EXPIRES_IN as SignOptions['expiresIn'],
     algorithm: 'HS256',
   });
@@ -50,15 +53,25 @@ export function clearAuthCookie(res: Response): void {
   res.clearCookie(env.COOKIE_NAME, cookieOptions());
 }
 
-/** Tokens issued before the last password change are no longer valid. */
-export function tokenIsStale(admin: AdminDoc, iat: number): boolean {
+/** Tokens from before the last logout or password change are no longer valid. */
+export function tokenIsStale(admin: AdminDoc, payload: TokenPayload): boolean {
+  if ((payload.v ?? 0) !== (admin.sessionVersion ?? 0)) return true;
   if (!admin.passwordChangedAt) return false;
-  return Math.floor(admin.passwordChangedAt.getTime() / 1000) > iat;
+  return Math.floor(admin.passwordChangedAt.getTime() / 1000) > payload.iat;
+}
+
+/** Invalidate every session (logout, password change). */
+export async function revokeSessions(adminId: string): Promise<AdminDoc | null> {
+  return Admin.findByIdAndUpdate(adminId, { $inc: { sessionVersion: 1 } }, { new: true });
 }
 
 /**
  * Check credentials, applying the lockout policy: after MAX_FAILED_ATTEMPTS
  * wrong passwords the account is locked for LOCK_DURATION_MS.
+ *
+ * Each attempt atomically claims one of the MAX_FAILED_ATTEMPTS slots *before*
+ * the (slow) bcrypt check, so a burst of parallel requests can't all read
+ * "0 failures" and slip past the limit.
  */
 export async function authenticate(email: string, password: string): Promise<AdminDoc> {
   const admin = await Admin.findOne({ email }).select('+passwordHash');
@@ -68,29 +81,44 @@ export async function authenticate(email: string, password: string): Promise<Adm
     throw unauthorized('Invalid email or password');
   }
 
-  if (admin.lockUntil && admin.lockUntil.getTime() > Date.now()) {
-    throw lockedError(admin.lockUntil);
-  }
+  const now = new Date();
+  if (admin.lockUntil && admin.lockUntil > now) throw lockedError(admin.lockUntil);
+
+  const claimed = await Admin.findOneAndUpdate(
+    {
+      _id: admin._id,
+      failedAttempts: trusted({ $lt: MAX_FAILED_ATTEMPTS }),
+      $or: [{ lockUntil: null }, { lockUntil: trusted({ $lte: now }) }],
+    },
+    { $inc: { failedAttempts: 1 } },
+    { new: true },
+  );
+  if (!claimed) throw await lock(admin.id);
 
   const ok = await bcrypt.compare(password, admin.passwordHash);
   if (!ok) {
-    const attempts = admin.failedAttempts + 1;
-    if (attempts >= MAX_FAILED_ATTEMPTS) {
-      admin.failedAttempts = 0;
-      admin.lockUntil = new Date(Date.now() + LOCK_DURATION_MS);
-      await admin.save();
-      throw lockedError(admin.lockUntil);
-    }
-    admin.failedAttempts = attempts;
-    await admin.save();
+    if (claimed.failedAttempts >= MAX_FAILED_ATTEMPTS) throw await lock(admin.id);
     throw unauthorized('Invalid email or password');
   }
 
-  admin.failedAttempts = 0;
-  admin.lockUntil = null;
-  admin.lastLoginAt = new Date();
-  await admin.save();
-  return admin;
+  const updated = await Admin.findByIdAndUpdate(
+    admin._id,
+    { $set: { failedAttempts: 0, lockUntil: null, lastLoginAt: new Date() } },
+    { new: true },
+  );
+  return updated ?? admin;
+}
+
+/** Start (or report) the lockout window and return the error to throw. */
+async function lock(adminId: string): Promise<AppError> {
+  const until = new Date(Date.now() + LOCK_DURATION_MS);
+  // Only the first request to hit the limit sets the window; later ones report it.
+  await Admin.updateOne(
+    { _id: adminId, $or: [{ lockUntil: null }, { lockUntil: trusted({ $lte: new Date() }) }] },
+    { $set: { lockUntil: until, failedAttempts: 0 } },
+  );
+  const current = await Admin.findById(adminId).select('lockUntil');
+  return lockedError(current?.lockUntil ?? until);
 }
 
 function lockedError(until: Date): AppError {

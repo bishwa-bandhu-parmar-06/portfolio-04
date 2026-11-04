@@ -1,6 +1,7 @@
 import { SocialIcon } from '@/components/ui/Icon';
 import type { SiteData } from '@/lib/types';
 import { NAV_LINKS } from '@/lib/nav';
+import { SectionLink } from './SectionLink';
 
 export function Footer({ site }: { site: SiteData }) {
   const { profile, socialLinks } = site;
@@ -18,9 +19,9 @@ export function Footer({ site }: { site: SiteData }) {
           <ul className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted">
             {NAV_LINKS.map((link) => (
               <li key={link.id}>
-                <a href={`/#${link.id}`} className="transition-colors hover:text-text">
+                <SectionLink section={link.id} className="transition-colors hover:text-text">
                   {link.label}
-                </a>
+                </SectionLink>
               </li>
             ))}
           </ul>

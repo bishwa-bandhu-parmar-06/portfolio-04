@@ -1,14 +1,13 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono, Space_Grotesk } from 'next/font/google';
 import { getSite } from '@/lib/api';
+import { SITE_URL } from '@/lib/site';
 import { themeBootScript, themeCss } from '@/lib/theme';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
 const spaceGrotesk = Space_Grotesk({ subsets: ['latin'], variable: '--font-space-grotesk', display: 'swap' });
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-jetbrains-mono', display: 'swap' });
-
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
 
 export async function generateMetadata(): Promise<Metadata> {
   const { seo, profile } = await getSite();
@@ -28,7 +27,7 @@ export async function generateMetadata(): Promise<Metadata> {
       siteName: profile.name,
       title,
       description,
-      ...(seo.ogImage ? { images: [{ url: seo.ogImage.url, width: seo.ogImage.width, height: seo.ogImage.height }] } : {}),
+      // og:image comes from app/opengraph-image.tsx, which serves the admin-uploaded image when one is set.
     },
     twitter: { card: 'summary_large_image', title, description },
   };

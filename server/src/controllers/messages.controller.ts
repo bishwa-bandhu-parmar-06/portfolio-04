@@ -6,6 +6,7 @@ import { notifyNewMessage } from '../services/mail.service';
 import { idParams } from '../validators/common';
 import { contactBody, messageListQuery, messageUpdate } from '../validators/message';
 import { notFound } from '../utils/errors';
+import { clientIp } from '../utils/clientIp';
 import { escapeRegex, hashIp } from '../utils/strings';
 
 /** Public: POST /api/public/contact */
@@ -22,7 +23,7 @@ export const submitContact: RequestHandler[] = [
 
     await Message.create({
       ...fields,
-      ipHash: hashIp(req.ip),
+      ipHash: hashIp(clientIp(req)),
       userAgent: String(req.get('user-agent') ?? '').slice(0, 300),
     });
     void notifyNewMessage(fields);

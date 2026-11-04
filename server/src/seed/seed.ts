@@ -19,6 +19,7 @@ import {
   SocialLink,
 } from '../models';
 import { hashPassword } from '../services/auth.service';
+import { refreshSiteNow } from '../services/revalidate.service';
 import { strongPassword } from '../validators/auth';
 import * as data from './data';
 
@@ -66,7 +67,9 @@ async function seedCollection(name: string, model: Model<any>, docs: readonly ob
 
 async function seedSettings() {
   const existing = await SiteSettings.findOne();
-  if (existing && !FORCE) {
+  // The API creates a blank settings document the first time anything reads it, so
+  // "exists but has no name" means it was never seeded, not that it was edited.
+  if (existing && existing.profile?.name && !FORCE) {
     console.log('• Site settings: already exist, skipped');
     return;
   }
@@ -79,7 +82,9 @@ async function main() {
   await connectDB();
   console.log(FORCE ? 'Seeding (force: replacing all content)…' : 'Seeding…');
 
-  await seedAdmin();
+  // A problem with the admin credentials shouldn't stop the content from loading.
+  let adminError: Error | null = null;
+  await seedAdmin().catch((err: Error) => (adminError = err));
   await seedSettings();
   await seedCollection('Social links', SocialLink, data.socialLinks);
   await seedCollection('Experience', Experience, data.experience);
@@ -89,6 +94,19 @@ async function main() {
   await seedCollection('Certifications', Certification, data.certifications);
   await seedCollection('Coding profiles', CodingProfile, data.codingProfiles);
 
+  // The seed writes straight to the database, so tell the website its cached pages are stale.
+  console.log(
+    (await refreshSiteNow())
+      ? '• Website cache refreshed'
+      : '• Website not reachable at CLIENT_URL; it will show the new content after its next build or refresh',
+  );
+
+  if (adminError) {
+    console.error(`\n⚠ Content loaded, but the admin account was NOT created:\n  ${(adminError as Error).message}`);
+    console.error('  Fix ADMIN_EMAIL / ADMIN_PASSWORD in .env and run "npm run seed" again.');
+    process.exitCode = 1;
+    return;
+  }
   console.log('Done. Upload your photo and resumes from the admin dashboard.');
 }
 

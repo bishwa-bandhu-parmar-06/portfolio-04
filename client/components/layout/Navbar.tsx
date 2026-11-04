@@ -3,21 +3,88 @@
 import { FileText, Menu, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { buttonClass } from '@/components/ui/primitives';
 import { cn } from '@/lib/format';
 import { NAV_LINKS } from '@/lib/nav';
-
+import { SectionLink, takePendingSection } from './SectionLink';
 
 interface NavbarProps {
   name: string;
   resumeUrl?: string;
 }
 
-export function Navbar({ name, resumeUrl }: NavbarProps) {
+/**
+ * Home-page section tracking: highlights the section in view, and scrolls to the
+ * section a cross-page SectionLink asked for. It reads the pathname so it re-runs
+ * after client-side navigation back to "/". It renders nothing, so it lives in its
+ * own <Suspense> boundary: pages rendered on demand (e.g. a project added after
+ * the deploy) can then still be served from the pre-rendered shell.
+ */
+function SectionSpy({ onActive }: { onActive: (id: string | null) => void }) {
   const pathname = usePathname();
-  const onHome = pathname === '/';
+
+  useEffect(() => {
+    onActive(null);
+    if (pathname !== '/') return;
+
+    // Section to bring into view: one requested by a SectionLink on another page, or the URL hash.
+    const pending = takePendingSection();
+    const target = pending ?? (decodeURIComponent(window.location.hash.slice(1)) || null);
+    const deadline = performance.now() + 3000;
+    let frame = 0;
+    let steady = 0;
+    let observer: IntersectionObserver | null = null;
+    let userScrolled = false;
+    const onUserScroll = () => (userScrolled = true);
+    const USER_INPUT = ['wheel', 'touchstart', 'keydown'] as const;
+    USER_INPUT.forEach((e) => window.addEventListener(e, onUserScroll, { once: true, passive: true }));
+
+    // Sections may still be streaming in, and the router's scroll-to-top can run after us,
+    // so work frame by frame for up to 3s: keep the target in view until it holds still,
+    // and start observing sections once they all exist.
+    const tick = () => {
+      const sections = NAV_LINKS.map((l) => document.getElementById(l.id)).filter(Boolean) as HTMLElement[];
+      if (!observer && (sections.length === NAV_LINKS.length || performance.now() >= deadline)) {
+        observer = new IntersectionObserver(
+          (entries) => {
+            for (const entry of entries) if (entry.isIntersecting) onActive(entry.target.id);
+          },
+          { rootMargin: '-45% 0px -50% 0px' },
+        );
+        sections.forEach((el) => observer!.observe(el));
+      }
+
+      let settled = !target || userScrolled;
+      const el = target && !userScrolled ? document.getElementById(target) : null;
+      if (el) {
+        const padding = parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop || '0');
+        if (Math.abs(el.getBoundingClientRect().top - padding) > 4) {
+          steady = 0;
+          el.scrollIntoView({ block: 'start', behavior: 'instant' });
+        } else if (++steady >= 10) {
+          settled = true;
+          // Reflect the section in the URL, keeping the router's history state.
+          if (pending) window.history.replaceState(window.history.state, '', `/#${pending}`);
+        }
+      }
+
+      if ((!settled || !observer) && performance.now() < deadline) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      USER_INPUT.forEach((e) => window.removeEventListener(e, onUserScroll));
+      observer?.disconnect();
+    };
+  }, [pathname, onActive]);
+
+  return null;
+}
+
+export function Navbar({ name, resumeUrl }: NavbarProps) {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState<string | null>(null);
@@ -28,20 +95,6 @@ export function Navbar({ name, resumeUrl }: NavbarProps) {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
-
-  // Highlight the section currently in view.
-  useEffect(() => {
-    if (!onHome) return;
-    const sections = NAV_LINKS.map((l) => document.getElementById(l.id)).filter(Boolean) as HTMLElement[];
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) if (entry.isIntersecting) setActive(entry.target.id);
-      },
-      { rootMargin: '-45% 0px -50% 0px' },
-    );
-    sections.forEach((s) => observer.observe(s));
-    return () => observer.disconnect();
-  }, [onHome]);
 
   useEffect(() => {
     if (!open) return;
@@ -54,7 +107,6 @@ export function Navbar({ name, resumeUrl }: NavbarProps) {
     };
   }, [open]);
 
-  const href = (id: string) => (onHome ? `#${id}` : `/#${id}`);
   const initials = name
     .split(/\s+/)
     .map((w) => w[0])
@@ -68,6 +120,9 @@ export function Navbar({ name, resumeUrl }: NavbarProps) {
         scrolled || open ? 'border-border bg-bg/75 backdrop-blur-xl' : 'border-transparent bg-transparent',
       )}
     >
+      <Suspense fallback={null}>
+        <SectionSpy onActive={setActive} />
+      </Suspense>
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:rounded-lg focus:bg-card focus:px-3 focus:py-2"
@@ -85,8 +140,8 @@ export function Navbar({ name, resumeUrl }: NavbarProps) {
         <ul className="hidden items-center gap-1 md:flex">
           {NAV_LINKS.map((link) => (
             <li key={link.id}>
-              <a
-                href={href(link.id)}
+              <SectionLink
+                section={link.id}
                 aria-current={active === link.id ? 'true' : undefined}
                 className={cn(
                   'rounded-lg px-3 py-2 text-sm transition-colors',
@@ -94,7 +149,7 @@ export function Navbar({ name, resumeUrl }: NavbarProps) {
                 )}
               >
                 {link.label}
-              </a>
+              </SectionLink>
             </li>
           ))}
         </ul>
@@ -125,13 +180,13 @@ export function Navbar({ name, resumeUrl }: NavbarProps) {
           <ul className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-4">
             {NAV_LINKS.map((link) => (
               <li key={link.id}>
-                <a
-                  href={href(link.id)}
+                <SectionLink
+                  section={link.id}
                   onClick={() => setOpen(false)}
                   className="block rounded-lg px-3 py-3 text-base text-muted hover:bg-card hover:text-text"
                 >
                   {link.label}
-                </a>
+                </SectionLink>
               </li>
             ))}
             {resumeUrl && (

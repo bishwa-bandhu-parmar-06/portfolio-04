@@ -36,7 +36,9 @@ const envSchema = z.object({
   MAIL_FROM: z.string().default('Portfolio <noreply@bishwabandhu.me>'),
   CONTACT_NOTIFY_EMAIL: z.string().default(''),
 
-  IP_HASH_SALT: z.string().default('change-me'),
+  IP_HASH_SALT: z.string().default('dev-only-ip-hash-salt'),
+  /** Shared with the Next.js app; proves `x-client-ip` came from our own proxy. */
+  PROXY_SECRET: z.string().default(''),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -47,6 +49,17 @@ if (!parsed.success) {
     console.error(`  ${issue.path.join('.')}: ${issue.message}`);
   }
   process.exit(1);
+}
+
+// Secrets with dev defaults must be set explicitly in production.
+if (parsed.data.NODE_ENV === 'production') {
+  const weak = (['IP_HASH_SALT', 'PROXY_SECRET', 'REVALIDATE_SECRET'] as const).filter(
+    (key) => parsed.data[key].length < 32 || parsed.data[key].startsWith('dev-only'),
+  );
+  if (weak.length) {
+    console.error(`Set a random value of at least 32 characters for: ${weak.join(', ')}`);
+    process.exit(1);
+  }
 }
 
 export const env = parsed.data;

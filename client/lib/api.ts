@@ -31,12 +31,16 @@ export async function getSite(): Promise<SiteData> {
   return data;
 }
 
-export async function getProjectSlugs(): Promise<string[]> {
+export async function getProjectIndex(): Promise<{ slug: string; updatedAt: string }[]> {
   'use cache';
   cacheTag(CONTENT_TAG);
   cacheLife('days');
-  const data = await getJson<{ items: { slug: string }[] }>('/api/public/projects');
-  return data?.items.map((p) => p.slug) ?? [];
+  const data = await getJson<{ items: { slug: string; updatedAt: string }[] }>('/api/public/projects');
+  return data?.items ?? [];
+}
+
+export async function getProjectSlugs(): Promise<string[]> {
+  return (await getProjectIndex()).map((p) => p.slug);
 }
 
 export async function getProject(slug: string): Promise<ProjectDetail | null> {
