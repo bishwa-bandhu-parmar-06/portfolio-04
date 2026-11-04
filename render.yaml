@@ -1,0 +1,51 @@
+# Render Blueprint for the API (https://render.com/docs/blueprint-spec).
+# New → Blueprint → pick this repo. Render creates the service and asks for the
+# values marked `sync: false`. Copy the generated secrets you share with Vercel
+# (REVALIDATE_SECRET, PROXY_SECRET) from the dashboard afterwards.
+services:
+  - type: web
+    name: portfolio-api
+    runtime: node
+    plan: free
+    region: singapore # closest Render region to India
+    rootDir: server
+    # TypeScript is a dev dependency, so include dev deps for the build.
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY
+        value: '1'
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 1d
+      - key: CLIENT_ORIGINS
+        value: https://bishwabandhu.me,https://www.bishwabandhu.me
+      - key: CLIENT_URL
+        value: https://bishwabandhu.me
+      - key: REVALIDATE_SECRET
+        generateValue: true
+      - key: PROXY_SECRET
+        generateValue: true
+      - key: IP_HASH_SALT
+        generateValue: true
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: CLOUDINARY_FOLDER
+        value: portfolio
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        value: Portfolio <noreply@bishwabandhu.me>
+      - key: CONTACT_NOTIFY_EMAIL
+        value: bishwabandhuparmar06@gmail.com
