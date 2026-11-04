@@ -56,7 +56,13 @@ const nextConfig: NextConfig = {
   },
   async rewrites() {
     // Route handlers in app/api (e.g. /api/revalidate) take precedence over this rewrite.
-    return [{ source: '/api/:path*', destination: `${API_URL}/api/:path*` }];
+    return [
+      { source: '/api/:path*', destination: `${API_URL}/api/:path*` },
+      // Browsers and crawlers request these fixed paths even when the page links its icons.
+      { source: '/favicon.ico', destination: '/icon' },
+      { source: '/apple-touch-icon.png', destination: '/apple-icon' },
+      { source: '/apple-touch-icon-precomposed.png', destination: '/apple-icon' },
+    ];
   },
 };
 
