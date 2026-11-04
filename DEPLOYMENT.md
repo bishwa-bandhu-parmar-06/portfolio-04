@@ -106,7 +106,25 @@ When it is live, open `https://<your-service>.onrender.com/health`. You should s
 
 ---
 
-## 5. Website on Vercel
+## 5a. Reusing the Vercel project that served the old HTML site
+
+The domain is already attached to that project, so **no DNS changes are needed**. Change these settings **before** pushing the new code; the push triggers a deploy, and with the old settings that deploy would fail.
+
+1. **Settings → Build and Deployment:**
+   - **Framework Preset:** `Next.js` (the old site was probably "Other").
+   - **Root Directory:** `client`.
+   - **Build Command, Output Directory, Install Command:** turn every *Override* switch **off**, so Vercel uses the Next.js defaults (`npm run build`, `.next`, `npm install`).
+   - **Node.js Version:** 20.x or 22.x.
+2. **Settings → Environment Variables:** paste the whole `client/.env.vercel` into the first *Key* box, and select Production and Preview.
+3. **Settings → Domains:** check that `bishwabandhu.me` and `www.bishwabandhu.me` are listed. Leave them as they are.
+4. Deploy:
+   - If the new code is **already on `main`** (it is, after PR #1), open **Deployments**, click **⋯ → Redeploy** on the newest one, and leave "Use existing build cache" **unchecked**.
+   - Otherwise, push to `main`; Vercel builds it automatically.
+5. Open https://bishwabandhu.me, then follow the checklist in step 7.
+
+If you see the old site or a 404, open **Deployments** and check that the newest deployment is from the new commit and shows *Ready*. If it failed, the build log's first lines name the missing setting.
+
+## 5. Website on Vercel (new project)
 
 1. Vercel → **Add New → Project** → import the repo.
 2. **Root Directory:** `client`. Vercel detects Next.js.
